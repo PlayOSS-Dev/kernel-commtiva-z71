@@ -415,7 +415,7 @@ static int bi8232_set_sensitivity(struct elan_i2c_sensitivity *sen)
 static void bi8232_isr_workqueue(struct work_struct *work)
 {
 	struct input_dev *input = bi8232->input;
-	uint32_t poc = FIH_READ_POWER_ON_CAUSE();
+	//uint32_t poc = FIH_READ_POWER_ON_CAUSE();
 	int cnt, virtual_button;  //Modified for new CAP sample by Stanley (2009/05/25)
 
 	disable_irq(bi8232->client->irq);
@@ -431,22 +431,30 @@ static void bi8232_isr_workqueue(struct work_struct *work)
 				input_report_abs(input, ABS_MT_TOUCH_MAJOR, 255);
 				input_report_abs(input, ABS_MT_POSITION_X, (1792 - XCORD1(buffer)));
 				input_report_abs(input, ABS_MT_POSITION_Y, YCORD1(buffer));
+				input_report_abs(input, ABS_PRESSURE, 255);
+				input_report_key(input, BTN_TOUCH, 1);
 				input_mt_sync(input);
 			} else {
 				input_report_abs(input, ABS_MT_TOUCH_MAJOR, 0);
 				input_report_abs(input, ABS_MT_POSITION_X, (1792 - XCORD1(buffer)));
 				input_report_abs(input, ABS_MT_POSITION_Y, YCORD1(buffer));
+				input_report_abs(input, ABS_PRESSURE, 0);
+				input_report_key(input, BTN_TOUCH, 0);
 				input_mt_sync(input);
 			}
 			if (cnt > 1) {
 				input_report_abs(input, ABS_MT_TOUCH_MAJOR, 255);
 				input_report_abs(input, ABS_MT_POSITION_X, (1792 - XCORD2(buffer)));
 				input_report_abs(input, ABS_MT_POSITION_Y, YCORD2(buffer));
+				input_report_abs(input, ABS_PRESSURE, 255);
+				input_report_key(input, BTN_2, 1);
 				input_mt_sync(input);
 			} else {
 				input_report_abs(input, ABS_MT_TOUCH_MAJOR, 0);
 				input_report_abs(input, ABS_MT_POSITION_X, (1792 - XCORD2(buffer)));
 				input_report_abs(input, ABS_MT_POSITION_Y, YCORD2(buffer));
+				input_report_abs(input, ABS_PRESSURE, 0);
+				input_report_key(input, BTN_2, 0);
 				input_mt_sync(input);
 			}
 			if(!cnt)
@@ -466,7 +474,7 @@ static void bi8232_isr_workqueue(struct work_struct *work)
 				if(bIsFST)
 					input_report_key(input, KEY_SEND, 0);  //FST
 				else
-					input_report_key(input, KEY_KBDILLUMDOWN, 0);
+					input_report_key(input, KEY_MENU, 0);
 				//Added for FST--
 				bi8232_msg(INFO, "[TOUCH-CAP]virtual button SOFT1 - up!\n");
 				bSoft1CapKeyPressed = 0;
@@ -569,7 +577,8 @@ static void bi8232_isr_workqueue(struct work_struct *work)
 				input_report_abs(input, ABS_MT_POSITION_Y, 3072);
 				input_mt_sync(input);
 			}
-			if (poc == 0x1000001) {
+			//if (poc == 0x1000001) {
+			{
 				if(!bIsKeyLock)  //Added for new behavior (2009/09/27)
 				{
 					if(bIsFST)
@@ -600,7 +609,8 @@ static void bi8232_isr_workqueue(struct work_struct *work)
 				input_report_abs(input, ABS_MT_POSITION_Y, 3072);
 				input_mt_sync(input);
 			}
-			if (poc == 0x1000001) {
+			//if (poc == 0x1000001) {
+			{
 				if(!bIsKeyLock)  //Added for new behavior (2009/09/27)
 				{
 					if(bIsFST)
@@ -632,7 +642,8 @@ static void bi8232_isr_workqueue(struct work_struct *work)
 				input_report_abs(input, ABS_MT_POSITION_Y, 3072);
 				input_mt_sync(input);
 			}
-			if (poc == 0x1000001) {
+			//if (poc == 0x1000001) {
+			{
 				if(!bIsKeyLock)  //Added for new behavior (2009/09/27)
 				{
 					if(bIsF913 && !bIsFST)  //Added for FST
@@ -666,13 +677,14 @@ static void bi8232_isr_workqueue(struct work_struct *work)
 				input_report_abs(input, ABS_MT_POSITION_Y, 3072);
 				input_mt_sync(input);
 			}
-			if (poc == 0x1000001) {
+			//if (poc == 0x1000001) {
+			{
 				if(!bIsKeyLock)  //Added for new behavior (2009/09/27)
 				{
 					if(bIsFST)
 						input_report_key(input, KEY_SEND, 1);  //FST
 					else{
-						input_report_key(input, KEY_KBDILLUMDOWN, 1);
+						input_report_key(input, KEY_MENU, 1);
 						//bi8232_msg(INFO, "[TOUCH-CAP]virtual button KEY_KBDILLUMDOWN1 - down!\n");
 					}
 				}
@@ -1481,7 +1493,8 @@ static int bi8232_probe(struct i2c_client *client, const struct i2c_device_id *i
 		goto err1;
 	}
 
-	input->name = "Elan BI1050-M32EMAU Touchscreen";
+	//input->name = "Elan BI1050-M32EMAU Touchscreen";
+	input->name = "bi8232-jb";
 	input->phys = "bi8232/input0";
 	input->open = input_open;
 	input->close= input_close;
@@ -1493,6 +1506,8 @@ static int bi8232_probe(struct i2c_client *client, const struct i2c_device_id *i
 	set_bit(BTN_2, input->keybit);  //Added for Multi-touch
 	set_bit(KEY_BACK, input->keybit);  //Modified for new CAP sample by Stanley (2009/05/25)
 	set_bit(KEY_KBDILLUMDOWN, input->keybit);  //Modified for new CAP sample by Stanley (2009/05/25)
+	set_bit(KEY_MENU, input->keybit);
+	set_bit(KEY_SEARCH, input->keybit);
 	//Modified for Home and AP key (2009/07/31)++
 	if((FIH_READ_HWID_FROM_SMEM() >= CMCS_CTP_PR2) && (FIH_READ_HWID_FROM_SMEM() != CMCS_7627_PR1))
 	{
@@ -1538,6 +1553,7 @@ static int bi8232_probe(struct i2c_client *client, const struct i2c_device_id *i
 			pdata->abs_x_max, 0, 0);
 	input_set_abs_params(input, ABS_MT_POSITION_Y, pdata->abs_y_min,
 			pdata->abs_y_max, 0, 0);
+	input_set_abs_params(input, ABS_PRESSURE, 0, 255, 0, 0);
 	//Added the MT protocol for Eclair by Stanley (2010/03/23)--
 	bi8232->input = input;
 	if (input_register_device(bi8232->input)) {
@@ -1621,6 +1637,7 @@ static int bi8232_probe(struct i2c_client *client, const struct i2c_device_id *i
 	msm_touch_proc_file->proc_fops = &msm_touch_seq_fops;
 	//Added by Stanley for dump scheme--
 	return 0;
+
 
 err4:
 	misc_deregister(&bi8232_misc_dev);

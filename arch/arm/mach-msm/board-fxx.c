@@ -93,8 +93,11 @@ void __init msm_power_register(void);
 //For HVGA camera preview & SOC sensor (gain ~2 MB)
 //HVGA (420 x 320) preview + 5M (2592 x 1944) raw data + 512 x 384 thumbnail data
 #define MSM_PMEM_ADSP_SIZE	0x986000 // 0x201000 + 0x73D000 + 0x48000
-
+#ifdef CONFIG_FB_MSM_TRIPLE_BUFFER
+#define MSM_FB_SIZE    0x2EE000
+#else
 #define MSM_FB_SIZE		0xA0000
+#endif
 #define PMEM_KERNEL_EBI1_SIZE	0x200000
 
 char *board_serial;

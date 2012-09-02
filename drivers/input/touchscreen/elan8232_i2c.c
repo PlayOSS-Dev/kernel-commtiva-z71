@@ -1494,7 +1494,7 @@ static int bi8232_probe(struct i2c_client *client, const struct i2c_device_id *i
 	}
 
 	//input->name = "Elan BI1050-M32EMAU Touchscreen";
-	input->name = "bi8232-jb";
+	input->name = "bi8232-touch";
 	input->phys = "bi8232/input0";
 	input->open = input_open;
 	input->close= input_close;

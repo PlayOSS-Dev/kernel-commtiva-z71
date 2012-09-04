@@ -35,9 +35,7 @@
 struct kgsl_yamato_device {
 	struct kgsl_device dev;    /* Must be first field in this struct */
 	struct kgsl_memregion gmemspace;
-	unsigned int      drawctxt_count;
-	struct kgsl_drawctxt *drawctxt_active;
-	struct kgsl_drawctxt *drawctxt[KGSL_CONTEXT_MAX];
+	struct kgsl_yamato_context *drawctxt_active;
 	wait_queue_head_t ib1_wq;
 	unsigned int *pfp_fw;
 	size_t pfp_fw_size;
@@ -55,10 +53,16 @@ int __init kgsl_yamato_init_pwrctrl(struct kgsl_device *device);
 int kgsl_yamato_close(struct kgsl_device *device);
 
 int kgsl_yamato_idle(struct kgsl_device *device, unsigned int timeout);
-int kgsl_yamato_regread(struct kgsl_device *device, unsigned int offsetwords,
+void kgsl_yamato_regread(struct kgsl_device *device, unsigned int offsetwords,
 				unsigned int *value);
-int kgsl_yamato_regwrite(struct kgsl_device *device, unsigned int offsetwords,
+void kgsl_yamato_regwrite(struct kgsl_device *device, unsigned int offsetwords,
 				unsigned int value);
+void kgsl_yamato_regread_isr(struct kgsl_device *device,
+			     unsigned int offsetwords,
+			     unsigned int *value);
+void kgsl_yamato_regwrite_isr(struct kgsl_device *device,
+			      unsigned int offsetwords,
+			      unsigned int value);
 struct kgsl_device *kgsl_get_yamato_generic_device(void);
 int kgsl_yamato_getfunctable(struct kgsl_functable *ftbl);
 

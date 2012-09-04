@@ -903,33 +903,59 @@ static struct platform_device msm_bluesleep_device = {
 	.resource	= bluesleep_resources,
 };
 
+#ifdef CONFIG_ARCH_MSM7X27
+static struct resource kgsl_3d0_resources[] = {
+         {
+                 .name  = KGSL_3D0_REG_MEMORY,
+                 .start = 0xA0000000,
+                 .end = 0xA001ffff,
+                 .flags = IORESOURCE_MEM,
+         },
+         {
+                 .name = KGSL_3D0_IRQ,
+                 .start = INT_GRAPHICS,
+                 .end = INT_GRAPHICS,
+                 .flags = IORESOURCE_IRQ,
+         },
+};
 
-static struct resource kgsl_resources[] = {
-	{
-		.name = "kgsl_reg_memory",
-		.start = 0xA0000000,
-		.end = 0xA001ffff,
-		.flags = IORESOURCE_MEM,
+static struct kgsl_device_platform_data kgsl_3d0_pdata = {
+  .pwr_data = {
+    .pwrlevel = {
+      {
+        .gpu_freq = 128000000,
+        .bus_freq = 128000000,
+      },
+    },
+	
+    .init_level = 0,
+    .num_levels = 1,
+    .set_grp_async = NULL,
+    .idle_timeout = HZ/5,
+    .nap_allowed = true,
 	},
-	{
-		.name = "kgsl_yamato_irq",
-		.start = INT_GRAPHICS,
-		.end = INT_GRAPHICS,
-		.flags = IORESOURCE_IRQ,
+	.clk = {
+    .name = {
+      .clk = "grp_clk",
+      .pclk = "grp_pclk",
+    },
+  },
+  .imem_clk_name = {
+    .clk = "imem_clk",
+    .pclk = NULL,
 	},
 };
 
-static struct kgsl_platform_data kgsl_pdata;
-
-static struct platform_device msm_device_kgsl = {
-	.name = "kgsl",
-	.id = -1,
-	.num_resources = ARRAY_SIZE(kgsl_resources),
-	.resource = kgsl_resources,
-	.dev = {
-		.platform_data = &kgsl_pdata,
-	},
+struct platform_device msm_kgsl_3d0 = {
+         .name = "kgsl-3d0",
+         .id = 0,
+         .num_resources = ARRAY_SIZE(kgsl_3d0_resources),
+         .resource = kgsl_3d0_resources,
+         .dev = {
+                 .platform_data = &kgsl_3d0_pdata,
+         },
 };
+#endif
 
 static struct platform_device msm_device_pmic_leds = {
 	.name   = "pmic-leds",
@@ -1425,7 +1451,7 @@ static struct platform_device *devices[] __initdata = {
 	&msm_bluesleep_device,
 
 	&headset_sensor_device, 
-	&msm_device_kgsl,
+	&msm_kgsl_3d0,
 	&ALSPS_sensor_device, 
 	&mtb_platform_device,
 	&hs_device,
@@ -1773,38 +1799,6 @@ static void __init msm7x2x_init(void)
 
 	msm_acpu_clock_init(&msm7x2x_clock_data);
 	msm_read_serial_number_from_nvitem();
-
-#ifdef CONFIG_MSM_KGSL
-        /* This value has been set to 160000 for power savings. */
-        /* OEMs may modify the value at their discretion for performance */
-        /* The appropriate maximum replacement for 160000 is: */
-        /* msm7x2x_clock_data.max_axi_khz */
-	kgsl_pdata.pwrlevel_3d[0].gpu_freq = 0;
-	kgsl_pdata.pwrlevel_3d[0].bus_freq = 160000000;
-	kgsl_pdata.init_level_3d = 0;
-	kgsl_pdata.num_levels_3d = 1;
-        /* 7x27 doesn't allow graphics clocks to be run asynchronously to */
-        /* the AXI bus */
-        kgsl_pdata.set_grp2d_async = NULL;
-        kgsl_pdata.set_grp3d_async = NULL;
-        kgsl_pdata.imem_clk_name = "imem_clk";
-        kgsl_pdata.grp3d_clk_name = "grp_clk";
-        kgsl_pdata.grp3d_pclk_name = "grp_pclk";
-        kgsl_pdata.grp2d0_clk_name = NULL;
-        kgsl_pdata.idle_timeout_3d = HZ/5;
-        kgsl_pdata.idle_timeout_2d = 0;
-
-#ifdef CONFIG_KGSL_PER_PROCESS_PAGE_TABLE
-	kgsl_pdata.pt_va_size = SZ_32M;
-	/* Maximum of 32 concurrent processes */
-	kgsl_pdata.pt_max_count = 32;
-#else
-	kgsl_pdata.pt_va_size = SZ_128M;
-	/* We only ever have one pagetable for everybody */
-	kgsl_pdata.pt_max_count = 1;
-#endif
-
-#endif
 
 #ifdef CONFIG_USB_MSM_OTG_72K
 	msm_device_otg.dev.platform_data = &msm_otg_pdata;

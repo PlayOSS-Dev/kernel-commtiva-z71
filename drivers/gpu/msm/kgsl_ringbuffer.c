@@ -78,11 +78,11 @@ void kgsl_cp_intrcallback(struct kgsl_device *device)
 
 	KGSL_CMD_VDBG("enter (device=%p)\n", device);
 
-	kgsl_yamato_regread(device, REG_MASTER_INT_SIGNAL, &master_status);
+	kgsl_yamato_regread_isr(device, REG_MASTER_INT_SIGNAL, &master_status);
 	while (!status && (num_reads < VALID_STATUS_COUNT_MAX) &&
 		(master_status & MASTER_INT_SIGNAL__CP_INT_STAT)) {
-		kgsl_yamato_regread(device, REG_CP_INT_STATUS, &status);
-		kgsl_yamato_regread(device, REG_MASTER_INT_SIGNAL,
+		kgsl_yamato_regread_isr(device, REG_CP_INT_STATUS, &status);
+		kgsl_yamato_regread_isr(device, REG_MASTER_INT_SIGNAL,
 					&master_status);
 		num_reads++;
 	}
@@ -115,23 +115,23 @@ void kgsl_cp_intrcallback(struct kgsl_device *device)
 
 	if (status & CP_INT_CNTL__T0_PACKET_IN_IB_MASK) {
 		KGSL_CMD_FATAL("ringbuffer TO packet in IB interrupt\n");
-		kgsl_yamato_regwrite(rb->device, REG_CP_INT_CNTL, 0);
+		kgsl_yamato_regwrite_isr(rb->device, REG_CP_INT_CNTL, 0);
 	}
 	if (status & CP_INT_CNTL__OPCODE_ERROR_MASK) {
 		KGSL_CMD_FATAL("ringbuffer opcode error interrupt\n");
-		kgsl_yamato_regwrite(rb->device, REG_CP_INT_CNTL, 0);
+		kgsl_yamato_regwrite_isr(rb->device, REG_CP_INT_CNTL, 0);
 	}
 	if (status & CP_INT_CNTL__PROTECTED_MODE_ERROR_MASK) {
 		KGSL_CMD_FATAL("ringbuffer protected mode error interrupt\n");
-		kgsl_yamato_regwrite(rb->device, REG_CP_INT_CNTL, 0);
+		kgsl_yamato_regwrite_isr(rb->device, REG_CP_INT_CNTL, 0);
 	}
 	if (status & CP_INT_CNTL__RESERVED_BIT_ERROR_MASK) {
 		KGSL_CMD_FATAL("ringbuffer reserved bit error interrupt\n");
-		kgsl_yamato_regwrite(rb->device, REG_CP_INT_CNTL, 0);
+		kgsl_yamato_regwrite_isr(rb->device, REG_CP_INT_CNTL, 0);
 	}
 	if (status & CP_INT_CNTL__IB_ERROR_MASK) {
 		KGSL_CMD_FATAL("ringbuffer IB error interrupt\n");
-		kgsl_yamato_regwrite(rb->device, REG_CP_INT_CNTL, 0);
+		kgsl_yamato_regwrite_isr(rb->device, REG_CP_INT_CNTL, 0);
 	}
 	if (status & CP_INT_CNTL__SW_INT_MASK)
 		KGSL_CMD_DBG("ringbuffer software interrupt\n");
@@ -144,7 +144,7 @@ void kgsl_cp_intrcallback(struct kgsl_device *device)
 
 	/* only ack bits we understand */
 	status &= GSL_CP_INT_MASK;
-	kgsl_yamato_regwrite(device, REG_CP_INT_ACK, status);
+	kgsl_yamato_regwrite_isr(device, REG_CP_INT_ACK, status);
 
 	if (status & (CP_INT_CNTL__IB1_INT_MASK | CP_INT_CNTL__RB_INT_MASK)) {
 		KGSL_CMD_WARN("ringbuffer ib1/rb interrupt\n");
@@ -171,6 +171,7 @@ static void kgsl_ringbuffer_submit(struct kgsl_ringbuffer *rb)
 	* memory.  Adding a memory fence ensures ordering during ringbuffer
 	* submits.*/
 	mb();
+	outer_sync();
 
 	kgsl_yamato_regwrite(rb->device, REG_CP_RB_WPTR, rb->wptr);
 
@@ -687,6 +688,11 @@ kgsl_ringbuffer_addcmds(struct kgsl_ringbuffer *rb,
 		      KGSL_DEVICE_MEMSTORE_OFFSET(eoptimestamp)));
 	GSL_RB_WRITE(ringcmds, rcmd_gpu, rb->timestamp);
 
+	/*memory barriers added for the timestamp update*/
+	mb();
+	dsb();
+	outer_sync();
+
 	if (!(flags & KGSL_CMD_FLAGS_NO_TS_CMP)) {
 		/* Conditional execution based on memory values */
 		GSL_RB_WRITE(ringcmds, rcmd_gpu,
@@ -733,7 +739,7 @@ kgsl_ringbuffer_issuecmds(struct kgsl_device *device,
 
 int
 kgsl_ringbuffer_issueibcmds(struct kgsl_device_private *dev_priv,
-				int drawctxt_index,
+				struct kgsl_context *context,
 				struct kgsl_ibdesc *ibdesc,
 				unsigned int numibs,
 				uint32_t *timestamp,
@@ -744,16 +750,17 @@ kgsl_ringbuffer_issueibcmds(struct kgsl_device_private *dev_priv,
 	unsigned int *link;
 	unsigned int *cmds;
 	unsigned int i;
+	struct kgsl_yamato_context *drawctxt = context->devctxt;
 
-	KGSL_CMD_VDBG("enter (device_id=%d, drawctxt_index=%d, ibdesc=0x%08x,"
+	KGSL_CMD_VDBG("enter (device_id=%d, ibdesc=0x%08x,"
 			" numibs=%d, timestamp=%p)\n",
-			device->id, drawctxt_index, (unsigned int)ibdesc,
+			device->id, (unsigned int)ibdesc,
 			numibs, timestamp);
 
 	if (device->state & KGSL_STATE_HUNG)
 		return -EINVAL;
 	if (!(yamato_device->ringbuffer.flags & KGSL_FLAGS_STARTED) ||
-				(drawctxt_index >= KGSL_CONTEXT_MAX)) {
+	      context == NULL) {
 		KGSL_CMD_VDBG("return %d\n", -EINVAL);
 		return -EINVAL;
 	}
@@ -768,9 +775,8 @@ kgsl_ringbuffer_issueibcmds(struct kgsl_device_private *dev_priv,
 				" submission, size %x\n", numibs * 3);
 		return -ENOMEM;
 	}
-
 	for (i = 0; i < numibs; i++) {
-		(void)kgsl_cffdump_parse_ibs(dev_priv, NULL,
+		kgsl_cffdump_parse_ibs(dev_priv, NULL,
 			ibdesc[i].gpuaddr, ibdesc[i].sizedwords, false);
 
 		*cmds++ = PM4_HDR_INDIRECT_BUFFER_PFD;
@@ -782,14 +788,13 @@ kgsl_ringbuffer_issueibcmds(struct kgsl_device_private *dev_priv,
 		      kgsl_pt_get_flags(device->mmu.hwpagetable,
 					device->id));
 
-	kgsl_drawctxt_switch(yamato_device,
-			yamato_device->drawctxt[drawctxt_index], flags);
+	kgsl_drawctxt_switch(yamato_device, drawctxt, flags);
 
 	*timestamp = kgsl_ringbuffer_addcmds(&yamato_device->ringbuffer,
 					0, &link[0], (cmds - link));
 
 	KGSL_CMD_INFO("ctxt %d g %08x numibs %d ts %d\n",
-		drawctxt_index, (unsigned int)ibdesc, numibs, *timestamp);
+		context->id, (unsigned int)ibdesc, numibs, *timestamp);
 
 	KGSL_CMD_VDBG("return %d\n", 0);
 
